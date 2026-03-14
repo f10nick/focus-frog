@@ -567,7 +567,7 @@
       <div class="tt-row"><strong>iPhone / iPad</strong><br>Settings → Focus → Do Not Disturb</div>
       <div class="tt-row"><strong>Android</strong><br>Settings → Digital Wellbeing → Focus Mode</div>
       <div class="tt-row"><strong>Mac</strong><br>System Settings → Focus</div>
-      <div class="tt-note">On your phone, this button opens settings directly.</div>
+      <div class="tt-note">💡 Install to Home Screen for direct one-tap access to Focus settings.</div>
     </div>
   </div>
 
@@ -1370,9 +1370,24 @@ function handleBadgeClick() {
   document.getElementById("badge-btn").classList.toggle("blocked", badgeBlocked);
   document.getElementById("badge-txt").textContent =
     badgeBlocked ? "Distractions Blocked" : "Block Distractions";
-  if      (isIOS)     window.location.href = "App-prefs:FOCUS";
-  else if (isAndroid) window.location.href = "intent:#Intent;action=android.settings.DIGITAL_WELLBEING_SETTINGS;end";
-  else                document.getElementById("tooltip").classList.toggle("show");
+
+  if (isIOS) {
+    // Try the prefs URL — works when installed to home screen
+    // Falls back gracefully in Safari browser with no visible error
+    const a = document.createElement("a");
+    a.href = "App-prefs:FOCUS";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Show tooltip as fallback guidance if still in browser Safari
+    setTimeout(() => {
+      document.getElementById("tooltip").classList.add("show");
+    }, 800);
+  } else if (isAndroid) {
+    window.location.href = "intent:#Intent;action=android.settings.DIGITAL_WELLBEING_SETTINGS;end";
+  } else {
+    document.getElementById("tooltip").classList.toggle("show");
+  }
 }
 
 document.addEventListener("click", e => {
