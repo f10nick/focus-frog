@@ -389,6 +389,16 @@
       letter-spacing: .12em; text-transform: uppercase;
       cursor: pointer;
     }
+    #congrats-break-btn {
+      margin-top: 14px;
+      padding: 16px 32px; border-radius: 100px;
+      border: 1.5px solid #1e3a6e; background: transparent;
+      color: #4a7abf; font-family: inherit;
+      font-size: 13px; font-weight: 600;
+      letter-spacing: .04em;
+      cursor: pointer; transition: all .2s;
+    }
+    #congrats-break-btn:active { opacity: .7; }
 
     /* ── Panels ── */
     .panel { width: 100%; display: none; flex-direction: column; align-items: center; }
@@ -486,6 +496,62 @@
       height: 100%; background: var(--arc-lit);
       border-radius: 4px; transition: width .4s;
     }
+
+    /* ── Task log ── */
+    .ov-tasks-label {
+      width: calc(100% - 32px); margin-top: 22px;
+      font-size: 11px; letter-spacing: .15em; text-transform: uppercase;
+      color: var(--txt-dim); font-weight: 700;
+    }
+    .ov-tasks-list {
+      width: calc(100% - 32px); margin-top: 10px;
+      display: flex; flex-direction: column; gap: 8px;
+      padding-bottom: 8px;
+    }
+    .ov-task-row {
+      background: #0a1829; border: 1px solid #1a3060;
+      border-radius: 14px; padding: 16px 18px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .ov-task-row.completed  { border-color: #1a4a2a; }
+    .ov-task-row.in-progress{ border-color: #1a3a6e; }
+    .ov-task-row.not-started{ border-color: #1a3060; opacity: .6; }
+    .ov-task-top {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    }
+    .ov-task-name {
+      font-size: 14px; font-weight: 700; color: var(--txt-bright);
+      flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ov-task-badge {
+      font-size: 9px; font-weight: 700; letter-spacing: .12em;
+      text-transform: uppercase; border-radius: 100px;
+      padding: 4px 10px; flex-shrink: 0;
+    }
+    .ov-task-badge.completed   { background: #1a4a2a; color: #4ddb80; }
+    .ov-task-badge.in-progress { background: #1a3a6e; color: #4a9eff; }
+    .ov-task-badge.not-started { background: #1a2540; color: #2a4a7a; }
+    .ov-task-meta {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .ov-task-time {
+      font-size: 12px; color: var(--txt-dim);
+    }
+    .ov-task-prog-wrap {
+      flex: 1; height: 3px; background: #1a3060; border-radius: 4px;
+    }
+    .ov-task-prog-bar {
+      height: 100%; border-radius: 4px;
+      transition: width .4s;
+    }
+    .completed  .ov-task-prog-bar { background: #4ddb80; }
+    .in-progress .ov-task-prog-bar { background: #4a9eff; }
+    .not-started .ov-task-prog-bar { background: #1a3060; width: 0 !important; }
+    .ov-set-label {
+      font-size: 10px; color: #2a4a7a; letter-spacing: .08em;
+      text-transform: uppercase; margin-top: 6px; width: calc(100% - 32px);
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
@@ -568,6 +634,7 @@
       <div id="congrats-title">Congratulations!</div>
       <div id="congrats-sub">Have a break — and set your next 3 tasks when you're mentally ready.</div>
       <button id="congrats-btn" onclick="closeCongrats()">Set Next 3 Tasks</button>
+      <button id="congrats-break-btn" onclick="takeBreak()">No, I'm taking a well deserved break</button>
     </div>
   </div>
 
@@ -606,9 +673,14 @@
       </div>
     </div>
     <!-- Sessions list -->
-    <div class="ov-sessions-label">Sessions</div>
+    <div class="ov-sessions-label">Focus Sessions</div>
     <div class="ov-sessions" id="ov-sessions">
       <div class="ov-empty">No sessions yet today.<br>Start focusing to see your progress!</div>
+    </div>
+    <!-- Task log -->
+    <div class="ov-tasks-label">Tasks</div>
+    <div class="ov-tasks-list" id="ov-tasks-list">
+      <div class="ov-empty">No tasks set yet.</div>
     </div>
   </div>
 
@@ -673,8 +745,13 @@ function drawDial() {
   const svg = document.getElementById("dial-svg");
   svg.innerHTML = "";
 
-  const arcEnd   = A_START + A_SWEEP;
-  const thumbAng = valToAng(workMins);
+  const arcEnd = A_START + A_SWEEP;
+  // When running in work phase, shrink the arc as time counts down
+  const totalSecs = workMins * 60;
+  const displayMins = (running && phase === "work")
+    ? (timeLeft / totalSecs) * workMins   // fractional mins remaining
+    : workMins;
+  const thumbAng = valToAng(Math.max(VMIN, displayMins));
   const tx = CX + R * Math.cos(toRad(thumbAng));
   const ty = CY + R * Math.sin(toRad(thumbAng));
 
@@ -732,6 +809,7 @@ function drawDial() {
 
 // ── Update UI ─────────────────────────────────────────────────────────────────
 function updateUI() {
+  drawDial();
   document.getElementById("timer-inner").textContent = fmt(timeLeft);
   document.getElementById("phase-inner").textContent =
     running ? (phase === "work" ? "● FOCUSING" : "● BREAK") : "";
@@ -859,7 +937,7 @@ function todayKey() {
 
 function saveToStorage() {
   try {
-    localStorage.setItem(todayKey(), JSON.stringify({ sessions, totalFocusMins, frogs }));
+    localStorage.setItem(todayKey(), JSON.stringify({ sessions, totalFocusMins, frogs, taskLog }));
     if (sessions.length > 0) {
       const today = new Date().toISOString().slice(0, 10);
       let days = JSON.parse(localStorage.getItem(LS_PREFIX + "days") || "[]");
@@ -874,7 +952,7 @@ function loadFromStorage() {
     const raw = localStorage.getItem(todayKey());
     if (raw) {
       const d = JSON.parse(raw);
-      sessions = d.sessions || []; totalFocusMins = d.totalFocusMins || 0; frogs = d.frogs || 0;
+      sessions = d.sessions || []; totalFocusMins = d.totalFocusMins || 0; frogs = d.frogs || 0; taskLog = d.taskLog || [];
     }
   } catch(e) {}
 }
@@ -947,7 +1025,6 @@ function renderOverview() {
   }
   const maxDur = Math.max(...sessions.map(s => s.durationMins));
   container.innerHTML = sessions.slice().reverse().map((s, i) => {
-    const idx = sessions.length - 1 - i;
     const h = Math.floor(s.startHour);
     const m = Math.round((s.startHour - h) * 60);
     const timeStr = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
@@ -961,6 +1038,41 @@ function renderOverview() {
         <div class="ov-session-dur">${s.durationMins}m</div>
       </div>`;
   }).join("");
+
+  // ── Task log ──
+  const taskContainer = document.getElementById("ov-tasks-list");
+  if (taskLog.length === 0) {
+    taskContainer.innerHTML = `<div class="ov-empty">No tasks set yet.</div>`;
+  } else {
+    const maxTime = Math.max(1, ...taskLog.flat().map(t => t.timeMins));
+    taskContainer.innerHTML = taskLog.slice().reverse().map((set, si) => {
+      const setIdx = taskLog.length - si;
+      const setLabel = `<div class="ov-set-label">Set ${setIdx}</div>`;
+      const rows = set.map(task => {
+        const pct = Math.round((task.timeMins / maxTime) * 100);
+        const timeStr = task.timeMins > 0
+          ? (task.timeMins >= 60 ? `${Math.floor(task.timeMins/60)}h ${task.timeMins%60}m` : `${task.timeMins}m`)
+          : "—";
+        return `
+          <div class="ov-task-row ${task.status}">
+            <div class="ov-task-top">
+              <div class="ov-task-name">${task.name}</div>
+              <div class="ov-task-badge ${task.status}">${
+                task.status === "completed"   ? "✓ Completed"   :
+                task.status === "in-progress" ? "● In Progress" : "Not Started"
+              }</div>
+            </div>
+            <div class="ov-task-meta">
+              <div class="ov-task-time">⏱ ${timeStr}</div>
+              <div class="ov-task-prog-wrap">
+                <div class="ov-task-prog-bar" style="width:${pct}%"></div>
+              </div>
+            </div>
+          </div>`;
+      }).join("");
+      return setLabel + rows;
+    }).join("");
+  }
 }
 
 function drawChart() {
@@ -1061,6 +1173,163 @@ function drawChart() {
 // ── Amended tick: track session start/end ──────────────────────────────────────
 
 // ── Ambient ───────────────────────────────────────────────────────────────────
+// ── Web Audio sound engine ────────────────────────────────────────────────────
+let audioCtx = null;
+let soundNodes = [];   // currently playing nodes/sources
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function stopAllSounds() {
+  soundNodes.forEach(n => { try { n.stop ? n.stop() : n.disconnect(); } catch(e){} });
+  soundNodes = [];
+}
+
+// Brown noise buffer (deeper, more soothing than white)
+function makeBrownNoise(ctx, durationSecs) {
+  const sr = ctx.sampleRate;
+  const buf = ctx.createBuffer(1, sr * durationSecs, sr);
+  const data = buf.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < data.length; i++) {
+    const white = (Math.random() * 2 - 1);
+    last = (last + 0.02 * white) / 1.02;
+    data[i] = last * 3.5;
+  }
+  return buf;
+}
+
+// White noise buffer
+function makeWhiteNoise(ctx, durationSecs) {
+  const sr = ctx.sampleRate;
+  const buf = ctx.createBuffer(1, sr * durationSecs, sr);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.3;
+  return buf;
+}
+
+function playNoiseBuf(ctx, buf, filterType, filterFreq, gain) {
+  const master = ctx.createGain();
+  master.gain.value = gain;
+  master.connect(ctx.destination);
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = filterType;
+  filter.frequency.value = filterFreq;
+  filter.connect(master);
+
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  src.connect(filter);
+  src.start();
+  soundNodes.push(src);
+}
+
+// LFO-modulated oscillator for fire crackle / gentle tones
+function playLFO(ctx, baseFreq, lfoRate, lfoDepth, gainVal, waveType = "sine") {
+  const master = ctx.createGain();
+  master.gain.value = gainVal;
+  master.connect(ctx.destination);
+
+  const osc = ctx.createOscillator();
+  osc.type = waveType;
+  osc.frequency.value = baseFreq;
+
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = lfoRate;
+  const lfoGain = ctx.createGain();
+  lfoGain.gain.value = lfoDepth;
+  lfo.connect(lfoGain);
+  lfoGain.connect(osc.frequency);
+
+  osc.connect(master);
+  osc.start(); lfo.start();
+  soundNodes.push(osc, lfo);
+}
+
+// Rain: layered brown noise + high-pass filtered white noise
+function playRain(ctx) {
+  const brown = makeBrownNoise(ctx, 4);
+  playNoiseBuf(ctx, brown, "lowpass",  800, 0.35);
+  playNoiseBuf(ctx, brown, "highpass", 1200, 0.15);
+  const white = makeWhiteNoise(ctx, 4);
+  playNoiseBuf(ctx, white, "bandpass", 3000, 0.08);
+}
+
+// Ocean: slow LFO-modulated brown noise (wave rhythm)
+function playOcean(ctx) {
+  const buf = makeBrownNoise(ctx, 8);
+  const master = ctx.createGain();
+  master.gain.value = 0.4;
+  master.connect(ctx.destination);
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 600;
+  filter.connect(master);
+
+  const src = ctx.createBufferSource();
+  src.buffer = buf; src.loop = true;
+  src.connect(filter);
+  src.start();
+  soundNodes.push(src);
+
+  // Slow wave LFO on gain
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = 0.12;
+  const lfoG = ctx.createGain();
+  lfoG.gain.value = 0.25;
+  lfo.connect(lfoG);
+  lfoG.connect(master.gain);
+  lfo.start();
+  soundNodes.push(lfo);
+}
+
+// Forest: layered gentle wind + soft high tones
+function playForest(ctx) {
+  const buf = makeBrownNoise(ctx, 6);
+  playNoiseBuf(ctx, buf, "bandpass", 400, 0.18);
+  playNoiseBuf(ctx, buf, "highpass", 2000, 0.06);
+  playLFO(ctx, 220, 0.07, 15, 0.04, "sine");
+  playLFO(ctx, 330, 0.05, 10, 0.03, "sine");
+}
+
+// Café: gentle warm brown noise + occasional low rumble
+function playCafe(ctx) {
+  const buf = makeBrownNoise(ctx, 5);
+  playNoiseBuf(ctx, buf, "bandpass", 500, 0.22);
+  playNoiseBuf(ctx, buf, "lowpass",  300, 0.12);
+  playLFO(ctx, 180, 0.15, 8, 0.03, "sine");
+}
+
+// Fire: crackle = filtered noise with rapid LFO modulation
+function playFire(ctx) {
+  const buf = makeWhiteNoise(ctx, 3);
+  playNoiseBuf(ctx, buf, "bandpass", 1000, 0.12);
+  playNoiseBuf(ctx, buf, "lowpass",  400,  0.2);
+  const brown = makeBrownNoise(ctx, 3);
+  playNoiseBuf(ctx, brown, "bandpass", 600, 0.15);
+  playLFO(ctx, 80, 4, 30, 0.06, "sawtooth");
+}
+
+// White noise: plain filtered white noise
+function playWhiteNoise(ctx) {
+  const buf = makeWhiteNoise(ctx, 4);
+  playNoiseBuf(ctx, buf, "lowpass", 5000, 0.25);
+}
+
+const SOUND_FNS = {
+  "🌧  Rain":        playRain,
+  "🌊  Ocean":       playOcean,
+  "🌲  Forest":      playForest,
+  "☕  Café":        playCafe,
+  "🔥  Fire":        playFire,
+  "🌀  White Noise": playWhiteNoise,
+};
+
 function buildSoundGrid() {
   const grid = document.getElementById("sound-grid");
   SOUNDS.forEach(s => {
@@ -1068,7 +1337,21 @@ function buildSoundGrid() {
     btn.className = "sbtn";
     btn.textContent = s;
     btn.onclick = () => {
-      activeSound = activeSound === s ? null : s;
+      const ctx = getAudioCtx();
+      // Resume context (required by iOS after user gesture)
+      if (ctx.state === "suspended") ctx.resume();
+
+      if (activeSound === s) {
+        // Toggle off
+        activeSound = null;
+        stopAllSounds();
+      } else {
+        activeSound = s;
+        stopAllSounds();
+        const fn = SOUND_FNS[s];
+        if (fn) fn(ctx);
+      }
+
       document.querySelectorAll(".sbtn").forEach(b =>
         b.classList.toggle("on", b.textContent === activeSound));
       const np = document.getElementById("now-playing");
@@ -1100,6 +1383,9 @@ document.addEventListener("click", e => {
 // ── Task logic ───────────────────────────────────────────────────────────────
 let tasks        = ["", "", ""];   // the 3 task strings
 let currentTask  = -1;             // -1 = no tasks set, 0/1/2 = index of active task
+// taskLog: array of sets, each set = [{name, status, timeMins}]
+// status: "completed" | "in-progress" | "not-started"
+let taskLog      = [];             // persisted across app sessions
 
 function handleTaskBtn() {
   if (currentTask === -1) {
@@ -1131,6 +1417,13 @@ function setTasks() {
   if (!t0 && !t1 && !t2) { closeTaskModal(); return; }
   tasks = [t0 || "Task 1", t1 || "Task 2", t2 || "Task 3"];
   currentTask = 0;
+  // Add a new task set to the log
+  taskLog.push([
+    { name: tasks[0], status: "in-progress", timeMins: 0 },
+    { name: tasks[1], status: "not-started", timeMins: 0 },
+    { name: tasks[2], status: "not-started", timeMins: 0 },
+  ]);
+  saveToStorage();
   closeTaskModal();
   updateTaskBtn();
 }
@@ -1157,22 +1450,38 @@ function updateTaskBtn() {
 // Override frogEaten to advance tasks
 const _origFrogEaten = frogEaten;
 frogEaten = function() {
-  const isLastTask = currentTask === 2;  // completing task 3 (index 2)
+  const isLastTask = currentTask === 2;
   const hasActiveTasks = currentTask >= 0 && currentTask < 3;
 
+  // Helper: update the current task in taskLog with time spent and mark complete
+  function completeCurrentTaskInLog(elapsed) {
+    if (taskLog.length === 0) return;
+    const set = taskLog[taskLog.length - 1];
+    if (set[currentTask]) {
+      set[currentTask].timeMins += elapsed;
+      set[currentTask].status = "completed";
+      if (currentTask + 1 < 3) set[currentTask + 1].status = "in-progress";
+    }
+    saveToStorage();
+  }
+
   if (hasActiveTasks && !isLastTask) {
-    // Tasks 1 & 2: just record session + increment frogs, keep timer running
+    // Tasks 1 & 2: keep timer running
     if (phase === "work" && sessionStart) {
       const elapsed = Math.round((Date.now() - sessionStart) / 60000);
-      if (elapsed >= 1) recordSession(elapsed);
-      sessionStart = Date.now(); // restart session tracking for next task
+      if (elapsed >= 1) { recordSession(elapsed); completeCurrentTaskInLog(elapsed); }
+      sessionStart = Date.now();
     }
     frogs++;
     updateUI();
     currentTask++;
     updateTaskBtn();
   } else {
-    // Task 3 complete (or no tasks set): full stop as normal
+    // Task 3 or no tasks: stop timer
+    if (hasActiveTasks && phase === "work" && sessionStart) {
+      const elapsed = Math.round((Date.now() - sessionStart) / 60000);
+      if (elapsed >= 1) completeCurrentTaskInLog(elapsed);
+    }
     _origFrogEaten();
     if (hasActiveTasks) {
       currentTask++;
@@ -1189,6 +1498,14 @@ function closeCongrats() {
   currentTask = -1;
   updateTaskBtn();
   setTimeout(() => openTaskModal(), 300);
+}
+
+function takeBreak() {
+  document.getElementById("congrats-overlay").classList.remove("show");
+  // Reset tasks but just return to main screen — no modal
+  tasks = ["", "", ""];
+  currentTask = -1;
+  updateTaskBtn();
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
